@@ -44,7 +44,11 @@ setupSocketHandlers(io);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  res.status(200).send('OK');
+});
+
+app.get('/', (req, res) => {
+  res.json({ status: 'ok', message: 'Socket.io server running' });
 });
 
 // Get active rooms endpoint
