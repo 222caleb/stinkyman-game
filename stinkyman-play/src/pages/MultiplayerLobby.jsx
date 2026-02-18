@@ -38,10 +38,10 @@ export default function MultiplayerLobby() {
       console.log('✅ Joined room:', code, players);
       setRoomCode(code);
       setIsHost(false);
-      setRoomPlayers(players.map(p => ({ 
-        id: p.id, 
-        name: p.name, 
-        isReady: false 
+      setRoomPlayers(players.map(p => ({
+        id: p.id,
+        name: p.name,
+        isReady: false
       })));
       setMode("waiting");
       toast.success("Joined room!");
@@ -50,12 +50,24 @@ export default function MultiplayerLobby() {
     // Another player joined
     socket.on('playerJoined', ({ player }) => {
       console.log('👥 Player joined:', player);
-      setRoomPlayers(prev => [...prev, { 
-        id: player.id, 
-        name: player.name, 
-        isReady: false 
+      if (player.id === playerId) {
+        console.log('Ignoring self join event.')
+        return;
+      }
+      setRoomPlayers(prev => [...prev, {
+        id: player.id,
+        name: player.name,
+        isReady: false
       }]);
       toast.success(`${player.name} joined!`);
+    });
+
+    // Player ready status changed
+    socket.on('playerReadyChanged', ({ playerId: changedPlayerId, isReady }) => {
+      console.log('🎯 Player ready changed:', changedPlayerId, isReady);
+      setRoomPlayers(prev => prev.map(p =>
+        p.id === changedPlayerId ? { ...p, isReady } : p
+      ));
     });
 
     // Game state updated
@@ -85,6 +97,7 @@ export default function MultiplayerLobby() {
       socket.off('roomCreated');
       socket.off('joinedRoom');
       socket.off('playerJoined');
+      socket.off('playerReadyChanged');
       socket.off('gameStateUpdated');
       socket.off('playerDisconnected');
       socket.off('error');
@@ -109,82 +122,25 @@ export default function MultiplayerLobby() {
     }
 
     console.log('🎯 Joining room...', { roomCode: joinCode, playerId, playerName });
-    socket.emit('joinRoom', { 
-      roomCode: joinCode.trim().toUpperCase(), 
-      playerId, 
-      playerName: playerName.trim() 
+    socket.emit('joinRoom', {
+      roomCode: joinCode.trim().toUpperCase(),
+      playerId,
+      playerName: playerName.trim()
     });
   };
 
-  const handleStartGame = () => {
+  const handleToggleReady = () => {
     if (roomPlayers.length < 2) {
       toast.error("Need at least 2 players!");
       return;
     }
 
-    if (!isHost) {
-      toast.error("Only the host can start the game");
-      return;
-    }
+    const currentPlayer = roomPlayers.find(p => p.id === playerId);
+    const newReadyState = !currentPlayer?.isReady;
 
-    console.log('🎯 Starting game...');
-
-    // Create initial game state
-    const deck = createDeck();
-    let idx = 0;
-    
-    const playerStates = {};
-    roomPlayers.forEach(player => {
-      playerStates[player.id] = {
-        name: player.name,
-        hand: deck.slice(idx, idx + 3),
-        faceUp: deck.slice(idx + 3, idx + 6),
-        faceDown: deck.slice(idx + 6, idx + 9),
-        swapReady: false,
-      };
-      idx += 9;
-    });
-
-    const initialState = {
-      phase: "swap",
-      deck: deck.slice(idx),
-      pile: [],
-      players: playerStates,
-      currentTurn: roomPlayers[0].id,
-      isReversed: false,
-      winner: null,
-      customMessage: null,
-    };
-
-    socket.emit('gameStateUpdate', { roomCode, gameState: initialState });
-    
-    // Navigate immediately for host
-    navigate(createPageUrl("MultiplayerGame"), {
-      state: { roomCode, playerId, playerName }
-    });
+    console.log('🎯 Toggling ready:', playerId, newReadyState);
+    socket.emit('toggleReady', { roomCode, playerId, isReady: newReadyState });
   };
-
-  // Helper to create and shuffle deck
-  function createDeck() {
-    const suits = ["hearts", "diamonds", "clubs", "spades"];
-    const cards = [];
-    let id = 0;
-    for (const suit of suits) {
-      for (let rank = 2; rank <= 14; rank++) {
-        cards.push({ id: id++, suit, rank });
-      }
-    }
-    return shuffle(cards);
-  }
-
-  function shuffle(arr) {
-    const a = [...arr];
-    for (let i = a.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [a[i], a[j]] = [a[j], a[i]];
-    }
-    return a;
-  }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-emerald-900 via-green-800 to-emerald-900 p-6 flex items-center justify-center">
@@ -315,26 +271,23 @@ export default function MultiplayerLobby() {
                       {player.id === playerId && " (You)"}
                       {idx === 0 && " 👑"}
                     </span>
+                    {player.isReady ? (
+                      <span className="text-green-400 text-sm font-semibold">✓ Ready</span>
+                    ) : (
+                      <span className="text-white/40 text-sm">Not Ready</span>
+                    )}
                   </div>
                 ))}
               </div>
             </div>
 
-            {isHost && (
-              <Button
-                onClick={handleStartGame}
-                disabled={roomPlayers.length < 2}
-                className="w-full bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-400 hover:to-amber-400 text-gray-900 font-bold disabled:opacity-50 mb-2"
-              >
-                Start Game
-              </Button>
-            )}
-
-            {!isHost && (
-              <p className="text-center text-white/60 text-sm mb-2">
-                Waiting for host to start the game...
-              </p>
-            )}
+            <Button
+              onClick={handleToggleReady}
+              disabled={roomPlayers.length < 2}
+              className="w-full bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-400 hover:to-amber-400 text-gray-900 font-bold disabled:opacity-50 mb-2"
+            >
+              {roomPlayers.find(p => p.id === playerId)?.isReady ? "Unready" : "Ready Up!"}
+            </Button>
 
             <Button
               onClick={() => {
@@ -343,11 +296,7 @@ export default function MultiplayerLobby() {
               variant="ghost"
               className="w-full text-white hover:bg-white/10"
             >
-              Cancel
+              Leave Room
             </Button>
           </Card>
         )}
-      </div>
-    </div>
-  );
-}
