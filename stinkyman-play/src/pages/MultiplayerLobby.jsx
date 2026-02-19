@@ -300,3 +300,7 @@ export default function MultiplayerLobby() {
             </Button>
           </Card>
         )}
+      </div>
+    </div>
+  );
+}
