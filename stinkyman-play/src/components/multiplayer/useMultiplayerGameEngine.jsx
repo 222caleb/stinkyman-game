@@ -74,6 +74,15 @@ function getPlayableCards(playerState, pile, isReversed) {
   return cards.filter(c => canPlayOnPile(c, pile, isReversed));
 }
 
+// Helper function to get rank name for display
+function getRankName(rank) {
+  if (rank === 14) return 'Ace';
+  if (rank === 13) return 'King';
+  if (rank === 12) return 'Queen';
+  if (rank === 11) return 'Jack';
+  return rank.toString();
+}
+
 export default function useMultiplayerGameEngine(roomCode, playerId) {
   const [gameState, setGameState] = useState(null);
   const [selectedCardIds, setSelectedCardIds] = useState([]);
@@ -112,7 +121,7 @@ export default function useMultiplayerGameEngine(roomCode, playerId) {
 
   const updateLocalMessage = (state, currentPlayerId) => {
     if (!state) return;
-    
+
     if (state.phase === "swap") {
       const myPlayer = state.players[currentPlayerId];
       if (myPlayer?.swapReady) {
@@ -139,7 +148,7 @@ export default function useMultiplayerGameEngine(roomCode, playerId) {
   const initializeGame = async (room, currentPlayerId) => {
     const deck = createDeck();
     let idx = 0;
-    
+
     const playerStates = {};
     room.players.forEach(player => {
       playerStates[player.playerId] = {
@@ -169,13 +178,13 @@ export default function useMultiplayerGameEngine(roomCode, playerId) {
 
   const updateGameState = useCallback(async (updater) => {
     if (!gameState || !roomCode || !socket) return;
-    
+
     const newState = typeof updater === 'function' ? updater(gameState) : updater;
-    
+
     // Optimistically update local state for immediate UI feedback
     setGameState(newState);
     updateLocalMessage(newState, playerId);
-    
+
     // Emit to server so other clients see the change
     try {
       socket.emit('gameStateUpdate', {
@@ -189,7 +198,7 @@ export default function useMultiplayerGameEngine(roomCode, playerId) {
 
   const selectCard = useCallback((card) => {
     if (!gameState) return;
-    
+
     const playerState = gameState.players[playerId];
     if (!playerState) return;
 
@@ -276,14 +285,20 @@ export default function useMultiplayerGameEngine(roomCode, playerId) {
   }, [gameState, playerId, selectedCardIds]);
 
   const playFaceDownCard = useCallback((card) => {
-    if (!gameState) return;
-    
+    if (!gameState || gameState.currentTurn !== playerId) return;
+
     const playerState = gameState.players[playerId];
+    if (!playerState) return;
+
+    // Remove from faceDown
     const newFaceDown = playerState.faceDown.filter(c => c.id !== card.id);
     const newPile = [...gameState.pile, card];
 
-    if (!canPlayOnPile(card, gameState.pile, gameState.isReversed)) {
-      // Failed blind play
+    // Check if it's a valid play
+    const isValid = canPlayOnPile(card, gameState.pile, gameState.isReversed);
+
+    if (!isValid) {
+      // Show the card briefly before taking pile
       updateGameState({
         ...gameState,
         pile: newPile,
@@ -291,14 +306,15 @@ export default function useMultiplayerGameEngine(roomCode, playerId) {
           ...gameState.players,
           [playerId]: { ...playerState, faceDown: newFaceDown }
         },
-        customMessage: `Revealed: ${card.rank}...`
+        customMessage: `Revealed: ${getRankName(card.rank)}... Invalid!`
       });
 
+      // Wait 1.2 seconds then take pile
       setTimeout(() => {
         const takenCards = newPile;
         const newHand = [...playerState.hand, ...takenCards].sort((a, b) => a.rank - b.rank);
         const nextPlayer = getNextPlayer(playerId, gameState.players);
-        
+
         updateGameState({
           ...gameState,
           pile: [],
@@ -308,27 +324,31 @@ export default function useMultiplayerGameEngine(roomCode, playerId) {
           },
           currentTurn: nextPlayer,
           isReversed: false,
-          customMessage: "Blind play failed! Took the pile."
+          customMessage: "Chance failed! Took the pile."
         });
       }, 1200);
     } else {
-      // Success
-      processAfterPlay({
+      // Valid play - just update pile and let normal game flow continue
+      const nextPlayer = getNextPlayer(playerId, gameState.players);
+
+      updateGameState({
         ...gameState,
         pile: newPile,
         players: {
           ...gameState.players,
           [playerId]: { ...playerState, faceDown: newFaceDown }
-        }
-      }, card, playerId);
+        },
+        currentTurn: nextPlayer,
+        customMessage: `Revealed: ${getRankName(card.rank)}! Valid play.`
+      });
     }
-    
+
     setSelectedCardIds([]);
-  }, [gameState, playerId]);
+  }, [gameState, playerId, updateGameState]);
 
   const playCards = useCallback((cardsToPlay = selectedCardIds) => {
     if (!gameState || gameState.currentTurn !== playerId) return;
-    
+
     // Ensure cardsToPlay is an array
     const cardsArray = Array.isArray(cardsToPlay) ? cardsToPlay : selectedCardIds;
     if (cardsArray.length === 0) return;
@@ -348,7 +368,7 @@ export default function useMultiplayerGameEngine(roomCode, playerId) {
 
     const newPile = [...gameState.pile, ...selected];
     const selectedIds = new Set(selected.map(c => c.id));
-    
+
     let newPlayerState = { ...playerState };
     if (playerState.hand.length > 0) {
       newPlayerState.hand = playerState.hand.filter(c => !selectedIds.has(c.id));
@@ -376,7 +396,7 @@ export default function useMultiplayerGameEngine(roomCode, playerId) {
     if (playedCard.rank === 10 || checkFourOfAKind(updatedState.pile)) {
       burned = true;
       updatedState.customMessage = playedCard.rank === 10 ? "🔥 10 played! Burning pile..." : "🔥 Four of a kind! Burning pile...";
-      
+
       updateGameState(updatedState);
 
       setTimeout(() => {
@@ -447,7 +467,7 @@ export default function useMultiplayerGameEngine(roomCode, playerId) {
 
     const playerState = gameState.players[playerId];
     if (playerState?.swapReady) return; // Already ready
-    
+
     // Mark this player as ready for swap
     const updatedPlayers = {
       ...gameState.players,
@@ -462,7 +482,7 @@ export default function useMultiplayerGameEngine(roomCode, playerId) {
       const playerIds = Object.keys(updatedPlayers);
       let lowestPlayer = playerIds[0];
       let lowestRank = Infinity;
-      
+
       for (const pid of playerIds) {
         const player = updatedPlayers[pid];
         const allCards = [...player.hand, ...player.faceUp, ...player.faceDown];
@@ -475,7 +495,7 @@ export default function useMultiplayerGameEngine(roomCode, playerId) {
           }
         }
       }
-      
+
       // All players ready - start the game
       await updateGameState({
         ...gameState,
@@ -491,7 +511,7 @@ export default function useMultiplayerGameEngine(roomCode, playerId) {
         players: updatedPlayers
       });
     }
-    
+
     setSelectedCardIds([]);
   }, [gameState, playerId, updateGameState]);
 

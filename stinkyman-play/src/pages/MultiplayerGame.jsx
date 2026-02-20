@@ -11,27 +11,6 @@ import useMultiplayerGameEngine from "@/components/multiplayer/useMultiplayerGam
 import useReconnect from "@/components/multiplayer/useReconnect";
 import ChatPanel from "@/components/multiplayer/ChatPanel";
 
-function createDeck() {
-  const suits = ["hearts", "diamonds", "clubs", "spades"];
-  const cards = [];
-  let id = 0;
-  for (const suit of suits) {
-    for (let rank = 2; rank <= 14; rank++) {
-      cards.push({ id: id++, suit, rank });
-    }
-  }
-  return shuffle(cards);
-}
-
-function shuffle(arr) {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-}
-
 export default function MultiplayerGame() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -126,7 +105,7 @@ export default function MultiplayerGame() {
                       faceUp={opp.faceUp}
                       faceDown={opp.faceDown}
                       selectedIds={[]}
-                      onCardClick={() => {}}
+                      onCardClick={() => { }}
                       disabled={true}
                       hideHand={true}
                       isCurrentTurn={gameState.currentTurn === opp.id}
@@ -173,8 +152,8 @@ export default function MultiplayerGame() {
       <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10">
         <ActionBar
           phase={gameState.phase}
-          onDeal={() => {}}
-          onMultiplayer={() => {}}
+          onDeal={() => { }}
+          onMultiplayer={() => { }}
           onConfirmSwap={confirmSwap}
           onPlay={playCards}
           canPlay={canPlay}
@@ -196,45 +175,16 @@ export default function MultiplayerGame() {
             <div className="flex gap-3">
               <Button
                 onClick={() => {
-                  // Rematch logic - reset game state
-                  const deck = createDeck();
-                  let idx = 0;
-                  const playerStates = {};
-                  Object.keys(gameState.players).forEach(pid => {
-                    playerStates[pid] = {
-                      name: gameState.players[pid].name,
-                      hand: deck.slice(idx, idx + 3),
-                      faceUp: deck.slice(idx + 3, idx + 6),
-                      faceDown: deck.slice(idx + 6, idx + 9),
-                      swapReady: false,
-                    };
-                    idx += 9;
-                  });
-
-                  const newGameState = {
-                    phase: "swap",
-                    deck: deck.slice(idx),
-                    pile: [],
-                    players: playerStates,
-                    currentTurn: Object.keys(gameState.players)[0],
-                    isReversed: false,
-                    winner: null,
-                    customMessage: null,
-                  };
-
-                  base44.entities.GameRoom.update(roomId, {
-                    status: "playing",
-                    gameState: newGameState
-                  });
+                  console.log('🔄 Returning to lobby for new game...');
+                  navigate(createPageUrl("MultiplayerLobby"));
                 }}
                 className="bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-400 hover:to-emerald-400 text-white font-bold"
               >
-                Rematch
+                New Game
               </Button>
               <Button
                 onClick={() => navigate(createPageUrl("MainMenu"))}
-                variant="outline"
-                className="border-white/30 text-white hover:bg-white/10"
+                className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white font-bold border-2 border-white/20"
               >
                 Back to Menu
               </Button>
