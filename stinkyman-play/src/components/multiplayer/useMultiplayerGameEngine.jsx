@@ -328,23 +328,30 @@ export default function useMultiplayerGameEngine(roomCode, playerId) {
         });
       }, 1200);
     } else {
-      // Valid play - just update pile and let normal game flow continue
-      const nextPlayer = getNextPlayer(playerId, gameState.players);
-
-      updateGameState({
+      // Valid play - process it properly with processAfterPlay
+      const stateAfterPlay = {
         ...gameState,
         pile: newPile,
         players: {
           ...gameState.players,
           [playerId]: { ...playerState, faceDown: newFaceDown }
-        },
-        currentTurn: nextPlayer,
+        }
+      };
+
+      // First show the card
+      updateGameState({
+        ...stateAfterPlay,
         customMessage: `Revealed: ${getRankName(card.rank)}! Valid play.`
       });
+
+      // Then process after a brief delay
+      setTimeout(() => {
+        processAfterPlay(stateAfterPlay, card, playerId);
+      }, 600);
     }
 
     setSelectedCardIds([]);
-  }, [gameState, playerId, updateGameState]);
+  }, [gameState, playerId, updateGameState, processAfterPlay]);
 
   const playCards = useCallback((cardsToPlay = selectedCardIds) => {
     if (!gameState || gameState.currentTurn !== playerId) return;
