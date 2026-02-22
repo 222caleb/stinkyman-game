@@ -196,6 +196,80 @@ export default function useMultiplayerGameEngine(roomCode, playerId) {
     }
   }, [gameState, roomCode, playerId, socket]);
 
+  const processAfterPlay = useCallback((newState, playedCard, who) => {
+    let updatedState = { ...newState, customMessage: null };
+
+    // Check for burn
+    let burned = false;
+    if (playedCard.rank === 10 || checkFourOfAKind(updatedState.pile)) {
+      burned = true;
+      updatedState.customMessage = playedCard.rank === 10 ? "🔥 10 played! Burning pile..." : "🔥 Four of a kind! Burning pile...";
+
+      updateGameState(updatedState);
+
+      setTimeout(() => {
+        const playerState = updatedState.players[who];
+        let finalState = {
+          ...updatedState,
+          pile: [],
+          isReversed: false,
+          currentTurn: who,
+          customMessage: "🔥 Pile burned! Play again."
+        };
+
+        if (playerState.hand.length < 3 && updatedState.deck.length > 0) {
+          const { hand, deck } = drawToThree(playerState.hand, updatedState.deck);
+          finalState.players = {
+            ...finalState.players,
+            [who]: { ...playerState, hand }
+          };
+          finalState.deck = deck;
+        }
+
+        updateGameState(finalState);
+      }, 1000);
+      return;
+    }
+
+    // Check for reverse or wild
+    if (playedCard.rank === 5) {
+      updatedState.isReversed = true;
+      updatedState.customMessage = "⬇ Reverse! Next play must be equal or lower.";
+    } else if (playedCard.rank === 2) {
+      updatedState.isReversed = false;
+      updatedState.customMessage = "Wild 2 — pile reset!";
+    } else {
+      updatedState.isReversed = false;
+    }
+
+    // Draw to 3
+    const playerState = updatedState.players[who];
+    if (playerState.hand.length < 3 && updatedState.deck.length > 0) {
+      const { hand, deck } = drawToThree(playerState.hand, updatedState.deck);
+      updatedState.players = {
+        ...updatedState.players,
+        [who]: { ...playerState, hand }
+      };
+      updatedState.deck = deck;
+    }
+
+    // Check win
+    if (checkWin(updatedState.players[who])) {
+      updatedState.winner = who;
+      updatedState.phase = "gameOver";
+      updateGameState(updatedState);
+      return;
+    }
+
+    // Switch turn
+    if (!burned) {
+      const nextPlayer = getNextPlayer(who, updatedState.players);
+      updatedState.currentTurn = nextPlayer;
+    }
+
+    updateGameState(updatedState);
+  }, [updateGameState]);
+
   const selectCard = useCallback((card) => {
     if (!gameState) return;
 
@@ -394,80 +468,6 @@ export default function useMultiplayerGameEngine(roomCode, playerId) {
 
     setSelectedCardIds([]);
   }, [gameState, playerId, selectedCardIds]);
-
-  const processAfterPlay = useCallback((newState, playedCard, who) => {
-    let updatedState = { ...newState, customMessage: null };
-
-    // Check for burn
-    let burned = false;
-    if (playedCard.rank === 10 || checkFourOfAKind(updatedState.pile)) {
-      burned = true;
-      updatedState.customMessage = playedCard.rank === 10 ? "🔥 10 played! Burning pile..." : "🔥 Four of a kind! Burning pile...";
-
-      updateGameState(updatedState);
-
-      setTimeout(() => {
-        const playerState = updatedState.players[who];
-        let finalState = {
-          ...updatedState,
-          pile: [],
-          isReversed: false,
-          currentTurn: who,
-          customMessage: "🔥 Pile burned! Play again."
-        };
-
-        if (playerState.hand.length < 3 && updatedState.deck.length > 0) {
-          const { hand, deck } = drawToThree(playerState.hand, updatedState.deck);
-          finalState.players = {
-            ...finalState.players,
-            [who]: { ...playerState, hand }
-          };
-          finalState.deck = deck;
-        }
-
-        updateGameState(finalState);
-      }, 1000);
-      return;
-    }
-
-    // Check for reverse or wild
-    if (playedCard.rank === 5) {
-      updatedState.isReversed = true;
-      updatedState.customMessage = "⬇ Reverse! Next play must be equal or lower.";
-    } else if (playedCard.rank === 2) {
-      updatedState.isReversed = false;
-      updatedState.customMessage = "Wild 2 — pile reset!";
-    } else {
-      updatedState.isReversed = false;
-    }
-
-    // Draw to 3
-    const playerState = updatedState.players[who];
-    if (playerState.hand.length < 3 && updatedState.deck.length > 0) {
-      const { hand, deck } = drawToThree(playerState.hand, updatedState.deck);
-      updatedState.players = {
-        ...updatedState.players,
-        [who]: { ...playerState, hand }
-      };
-      updatedState.deck = deck;
-    }
-
-    // Check win
-    if (checkWin(updatedState.players[who])) {
-      updatedState.winner = who;
-      updatedState.phase = "gameOver";
-      updateGameState(updatedState);
-      return;
-    }
-
-    // Switch turn
-    if (!burned) {
-      const nextPlayer = getNextPlayer(who, updatedState.players);
-      updatedState.currentTurn = nextPlayer;
-    }
-
-    updateGameState(updatedState);
-  }, [updateGameState]);
 
   const confirmSwap = useCallback(async () => {
     if (!gameState || gameState.phase !== "swap") return;
