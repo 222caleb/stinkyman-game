@@ -54,9 +54,6 @@ coverage/
 # Vercel
 .vercel/
 
-# Base44 (if any config files)
-.base44/
-
 # Temporary files
 *.tmp
 *.temp

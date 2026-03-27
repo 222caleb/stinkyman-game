@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ArrowLeft, User, Trophy, Target } from "lucide-react";
 import { createPageUrl } from "@/utils";
-import { base44 } from "@/api/base44Client";
 import { toast } from "sonner";
 import { CARD_THEMES } from "@/components/game/CardThemes";
 import Card from "@/components/game/Card";
@@ -40,40 +39,29 @@ export default function Profile() {
     loadProfile();
   }, []);
 
-  const loadProfile = async () => {
-    try {
-      const currentUser = await base44.auth.me();
-      setUser(currentUser);
-      setDisplayName(currentUser.displayName || "");
-      setSelectedAvatar(currentUser.avatar || "knight");
-      setSelectedTheme(currentUser.cardTheme || "classic");
-    } catch (error) {
-      console.error("Failed to load profile:", error);
-    } finally {
-      setLoading(false);
-    }
+  const loadProfile = () => {
+    const savedName = localStorage.getItem("profile_displayName") || "";
+    const savedAvatar = localStorage.getItem("profile_avatar") || "knight";
+    const savedTheme = localStorage.getItem("profile_cardTheme") || "classic";
+    setUser({ displayName: savedName, avatar: savedAvatar, cardTheme: savedTheme });
+    setDisplayName(savedName);
+    setSelectedAvatar(savedAvatar);
+    setSelectedTheme(savedTheme);
+    setLoading(false);
   };
 
-  const saveProfile = async () => {
+  const saveProfile = () => {
     if (!displayName.trim()) {
       toast.error("Please enter a display name");
       return;
     }
 
     setSaving(true);
-    try {
-      await base44.auth.updateMe({
-        displayName: displayName.trim(),
-        avatar: selectedAvatar,
-        cardTheme: selectedTheme,
-      });
-      toast.success("Profile updated!");
-    } catch (error) {
-      toast.error("Failed to save profile");
-      console.error(error);
-    } finally {
-      setSaving(false);
-    }
+    localStorage.setItem("profile_displayName", displayName.trim());
+    localStorage.setItem("profile_avatar", selectedAvatar);
+    localStorage.setItem("profile_cardTheme", selectedTheme);
+    toast.success("Profile updated!");
+    setSaving(false);
   };
 
   if (loading) {

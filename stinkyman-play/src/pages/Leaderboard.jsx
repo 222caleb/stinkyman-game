@@ -1,7 +1,5 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ArrowLeft, Trophy, Medal, Award } from "lucide-react";
@@ -9,14 +7,8 @@ import { createPageUrl } from "@/utils";
 
 export default function Leaderboard() {
   const navigate = useNavigate();
-
-  const { data: stats = [], isLoading } = useQuery({
-    queryKey: ["leaderboard"],
-    queryFn: async () => {
-      const allStats = await base44.entities.GameStats.list("-winRate", 100);
-      return allStats.filter(s => s.gamesPlayed > 0);
-    }
-  });
+  const stats = [];
+  const isLoading = false;
 
   const getRankIcon = (index) => {
     if (index === 0) return <Trophy className="w-6 h-6 text-yellow-400" />;

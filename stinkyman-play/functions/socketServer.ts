@@ -1,5 +1,4 @@
 import { Server } from "npm:socket.io@4.7.5";
-import { createClientFromRequest } from "npm:@base44/sdk@0.8.6";
 
 const rooms = new Map(); // roomCode -> { players, gameState, spectators }
 const playerSockets = new Map(); // socketId -> { roomCode, playerId, isSpectator }
@@ -9,8 +8,6 @@ function generateRoomCode() {
 }
 
 Deno.serve(async (req) => {
-  const base44 = createClientFromRequest(req);
-  
   if (req.headers.get("upgrade") === "websocket") {
     const { socket, response } = Deno.upgradeWebSocket(req);
     

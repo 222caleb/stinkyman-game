@@ -12,25 +12,11 @@ import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { RotateCcw, Home } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { base44 } from "@/api/base44Client";
-
 export default function GameBoard() {
   const navigate = useNavigate();
-  const [cardTheme, setCardTheme] = React.useState("classic");
-
-  React.useEffect(() => {
-    const loadTheme = async () => {
-      try {
-        const user = await base44.auth.me();
-        if (user?.cardTheme) {
-          setCardTheme(user.cardTheme);
-        }
-      } catch (error) {
-        console.error("Failed to load theme:", error);
-      }
-    };
-    loadTheme();
-  }, []);
+  const [cardTheme, setCardTheme] = React.useState(
+    () => localStorage.getItem("profile_cardTheme") || "classic"
+  );
   
   const {
     state,

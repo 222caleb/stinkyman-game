@@ -1,41 +1,4 @@
 import { useState, useCallback, useRef, useEffect } from "react";
-import { base44 } from "@/api/base44Client";
-
-async function saveGameStats(playerWon) {
-  try {
-    const user = await base44.auth.me();
-    if (!user) return;
-
-    const existing = await base44.entities.GameStats.filter({ playerEmail: user.email });
-    
-    if (existing.length > 0) {
-      const stats = existing[0];
-      const newGamesPlayed = stats.gamesPlayed + 1;
-      const newGamesWon = playerWon ? stats.gamesWon + 1 : stats.gamesWon;
-      const newGamesLost = playerWon ? stats.gamesLost : stats.gamesLost + 1;
-      const newWinRate = (newGamesWon / newGamesPlayed) * 100;
-      
-      await base44.entities.GameStats.update(stats.id, {
-        gamesPlayed: newGamesPlayed,
-        gamesWon: newGamesWon,
-        gamesLost: newGamesLost,
-        winRate: newWinRate,
-        playerName: user.displayName || user.full_name || user.email
-      });
-    } else {
-      await base44.entities.GameStats.create({
-        playerEmail: user.email,
-        playerName: user.displayName || user.full_name || user.email,
-        gamesPlayed: 1,
-        gamesWon: playerWon ? 1 : 0,
-        gamesLost: playerWon ? 0 : 1,
-        winRate: playerWon ? 100 : 0
-      });
-    }
-  } catch (error) {
-    console.error("Failed to save game stats:", error);
-  }
-}
 
 // ─── Deck Creation ───
 function createDeck() {
@@ -546,7 +509,6 @@ export default function useGameEngine() {
       // Delay game over phase to show final card animation
       setTimeout(() => {
         setState(prev => ({ ...prev, phase: "gameOver" }));
-        saveGameStats(who === "player");
       }, 600);
       return newState;
     }

@@ -1,14 +1,12 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { base44 } from "@/api/base44Client";
 
 export default function useReconnect() {
   const navigate = useNavigate();
   const [reconnectData, setReconnectData] = useState(null);
 
   useEffect(() => {
-    // Check for saved room data on mount
     const savedRoomId = localStorage.getItem("multiplayer_roomId");
     const savedPlayerId = localStorage.getItem("multiplayer_playerId");
     const savedPlayerName = localStorage.getItem("multiplayer_playerName");
@@ -16,22 +14,13 @@ export default function useReconnect() {
     const savedTimestamp = localStorage.getItem("multiplayer_timestamp");
 
     if (savedRoomId && savedPlayerId && savedPlayerName && savedRoomCode && savedTimestamp) {
-      // Check if saved data is less than 10 minutes old
       const age = Date.now() - parseInt(savedTimestamp);
       if (age < 10 * 60 * 1000) {
-        // Check if room still exists
-        base44.entities.GameRoom.filter({ id: savedRoomId }).then(rooms => {
-          if (rooms.length > 0 && rooms[0].status === "playing") {
-            setReconnectData({
-              roomId: savedRoomId,
-              playerId: savedPlayerId,
-              playerName: savedPlayerName,
-              roomCode: savedRoomCode
-            });
-          } else {
-            // Room doesn't exist or ended, clear storage
-            clearReconnectData();
-          }
+        setReconnectData({
+          roomId: savedRoomId,
+          playerId: savedPlayerId,
+          playerName: savedPlayerName,
+          roomCode: savedRoomCode
         });
       } else {
         clearReconnectData();

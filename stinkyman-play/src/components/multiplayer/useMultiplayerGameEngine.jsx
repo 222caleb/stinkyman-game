@@ -171,9 +171,6 @@ export default function useMultiplayerGameEngine(roomCode, playerId) {
       customMessage: null,
     };
 
-    await base44.entities.GameRoom.update(roomId, {
-      gameState: initialState
-    });
   };
 
   const updateGameState = useCallback(async (updater) => {
