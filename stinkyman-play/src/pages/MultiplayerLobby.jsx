@@ -25,7 +25,6 @@ export default function MultiplayerLobby() {
 
     // Room created successfully
     socket.on('roomCreated', ({ roomCode: code }) => {
-      console.log('✅ Room created:', code);
       setRoomCode(code);
       setIsHost(true);
       setRoomPlayers([{ id: playerId, name: playerName, isReady: false }]);
@@ -35,7 +34,6 @@ export default function MultiplayerLobby() {
 
     // Joined room successfully
     socket.on('joinedRoom', ({ roomCode: code, players }) => {
-      console.log('✅ Joined room:', code, players);
       setRoomCode(code);
       setIsHost(false);
       setRoomPlayers(players.map(p => ({
@@ -49,11 +47,8 @@ export default function MultiplayerLobby() {
 
     // Another player joined
     socket.on('playerJoined', ({ player }) => {
-      console.log('👥 Player joined:', player);
-      if (player.id === playerId) {
-        console.log('Ignoring self join event.')
-        return;
-      }
+      if (player.id === playerId) return;
+
       setRoomPlayers(prev => [...prev, {
         id: player.id,
         name: player.name,
@@ -64,7 +59,6 @@ export default function MultiplayerLobby() {
 
     // Player ready status changed
     socket.on('playerReadyChanged', ({ playerId: changedPlayerId, isReady }) => {
-      console.log('🎯 Player ready changed:', changedPlayerId, isReady);
       setRoomPlayers(prev => prev.map(p =>
         p.id === changedPlayerId ? { ...p, isReady } : p
       ));
@@ -72,7 +66,6 @@ export default function MultiplayerLobby() {
 
     // Game state updated
     socket.on('gameStateUpdated', ({ gameState }) => {
-      console.log('🎮 Game state updated:', gameState);
       if (gameState.phase === 'swap' || gameState.phase === 'playing') {
         // Game started, navigate to game
         navigate(createPageUrl("MultiplayerGame"), {
@@ -82,9 +75,9 @@ export default function MultiplayerLobby() {
     });
 
     // Player disconnected
-    socket.on('playerDisconnected', ({ playerName: disconnectedName }) => {
+    socket.on('playerDisconnected', ({ playerId: disconnectedId, playerName: disconnectedName }) => {
       toast.error(`${disconnectedName} disconnected`);
-      setRoomPlayers(prev => prev.filter(p => p.name !== disconnectedName));
+      setRoomPlayers(prev => prev.filter(p => p.id !== disconnectedId));
     });
 
     // Error handling
@@ -110,7 +103,6 @@ export default function MultiplayerLobby() {
       return;
     }
 
-    console.log('🎯 Creating room...', { playerId, playerName });
     socket.emit('createRoom', { playerId, playerName: playerName.trim() });
     setMode("waiting");
   };
@@ -121,7 +113,6 @@ export default function MultiplayerLobby() {
       return;
     }
 
-    console.log('🎯 Joining room...', { roomCode: joinCode, playerId, playerName });
     socket.emit('joinRoom', {
       roomCode: joinCode.trim().toUpperCase(),
       playerId,
@@ -138,7 +129,6 @@ export default function MultiplayerLobby() {
     const currentPlayer = roomPlayers.find(p => p.id === playerId);
     const newReadyState = !currentPlayer?.isReady;
 
-    console.log('🎯 Toggling ready:', playerId, newReadyState);
     socket.emit('toggleReady', { roomCode, playerId, isReady: newReadyState });
   };
 
@@ -262,10 +252,10 @@ export default function MultiplayerLobby() {
             </div>
 
             <div className="mb-6">
-              <h3 className="text-white font-semibold mb-2">Players ({roomPlayers.length}/6)</h3>
+              <h3 className="text-white font-semibold mb-2">Players ({roomPlayers.length}/2)</h3>
               <div className="space-y-2">
                 {roomPlayers.map((player, idx) => (
-                  <div key={idx} className="bg-white/10 rounded-lg p-3 flex items-center justify-between">
+                  <div key={player.id} className="bg-white/10 rounded-lg p-3 flex items-center justify-between">
                     <span className="text-white font-medium">
                       {player.name}
                       {player.id === playerId && " (You)"}

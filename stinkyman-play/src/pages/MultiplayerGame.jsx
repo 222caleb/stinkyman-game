@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Home } from "lucide-react";
@@ -26,30 +26,36 @@ export default function MultiplayerGame() {
     confirmSwap,
     playCards,
     takePile,
+    drawFromDeck,
     canPlay,
     canTakePile,
+    canDrawFromDeck,
   } = useMultiplayerGameEngine(roomCode, playerId);
 
+  // Redirect to lobby if there's no room state (e.g. hard refresh)
+  useEffect(() => {
+    if (!roomCode) {
+      navigate(createPageUrl("MultiplayerLobby"), { replace: true });
+    }
+  }, [roomCode, navigate]);
+
+  // Save reconnect data when entering game
   useEffect(() => {
     if (!roomCode) return;
-
-    // Save reconnect data when entering game
     saveReconnectData(roomCode, playerId, playerName, roomCode);
-
     return () => {
-      // Clear reconnect data when game ends
       if (gameState?.phase === "gameOver") {
         clearReconnectData();
       }
     };
   }, [roomCode, gameState?.phase]);
 
-  if (!gameState || !myState) {
+  if (!roomCode || !gameState || !myState) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-emerald-900 via-green-800 to-emerald-900 flex items-center justify-center">
         <div className="text-white text-center">
           <div className="text-lg mb-2">Initializing game...</div>
-          <div className="text-sm text-white/60">Room: {roomCode}</div>
+          {roomCode && <div className="text-sm text-white/60">Room: {roomCode}</div>}
         </div>
       </div>
     );
@@ -94,7 +100,7 @@ export default function MultiplayerGame() {
         {/* Opponents Area */}
         {opponents.length > 0 && (
           <div className="w-full max-w-6xl">
-            <div className={`grid gap-4 ${opponents.length <= 2 ? 'grid-cols-2' : opponents.length <= 3 ? 'grid-cols-3' : 'grid-cols-3'}`}>
+            <div className={`grid gap-4 ${opponents.length <= 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
               {opponents.map((opp) => (
                 <div key={opp.id} className="flex justify-center">
                   <div className="scale-75">
@@ -105,7 +111,7 @@ export default function MultiplayerGame() {
                       faceUp={opp.faceUp}
                       faceDown={opp.faceDown}
                       selectedIds={[]}
-                      onCardClick={() => { }}
+                      onCardClick={() => {}}
                       disabled={true}
                       hideHand={true}
                       isCurrentTurn={gameState.currentTurn === opp.id}
@@ -124,7 +130,8 @@ export default function MultiplayerGame() {
           <PileArea
             pile={gameState.pile}
             deckCount={gameState.deck?.length || 0}
-            deckClickable={false}
+            onDeckClick={drawFromDeck}
+            deckClickable={canDrawFromDeck}
             pileClickable={canTakePile}
             onPileClick={takePile}
           />
@@ -152,8 +159,8 @@ export default function MultiplayerGame() {
       <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10">
         <ActionBar
           phase={gameState.phase}
-          onDeal={() => { }}
-          onMultiplayer={() => { }}
+          onDeal={() => {}}
+          onMultiplayer={() => {}}
           onConfirmSwap={confirmSwap}
           onPlay={playCards}
           canPlay={canPlay}
@@ -174,10 +181,7 @@ export default function MultiplayerGame() {
             </h2>
             <div className="flex gap-3">
               <Button
-                onClick={() => {
-                  console.log('🔄 Returning to lobby for new game...');
-                  navigate(createPageUrl("MultiplayerLobby"));
-                }}
+                onClick={() => navigate(createPageUrl("MultiplayerLobby"))}
                 className="bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-400 hover:to-emerald-400 text-white font-bold"
               >
                 New Game

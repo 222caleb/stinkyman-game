@@ -12,12 +12,10 @@ export function SocketProvider({ children }) {
 
   useEffect(() => {
     function onConnect() {
-      console.log('✅ Socket connected in context');
       setConnected(true);
     }
 
     function onDisconnect() {
-      console.log('❌ Socket disconnected in context');
       setConnected(false);
     }
 

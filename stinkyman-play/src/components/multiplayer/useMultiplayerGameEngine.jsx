@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useSocket } from "./SocketContext";
 
 // ─── Deck Creation ───
@@ -74,7 +74,6 @@ function getPlayableCards(playerState, pile, isReversed) {
   return cards.filter(c => canPlayOnPile(c, pile, isReversed));
 }
 
-// Helper function to get rank name for display
 function getRankName(rank) {
   if (rank === 14) return 'Ace';
   if (rank === 13) return 'King';
@@ -87,19 +86,15 @@ export default function useMultiplayerGameEngine(roomCode, playerId) {
   const [gameState, setGameState] = useState(null);
   const [selectedCardIds, setSelectedCardIds] = useState([]);
   const [message, setMessage] = useState("");
-  const updateTimeoutRef = useRef(null);
   const { socket } = useSocket();
 
   // Subscribe to game state updates via socket
   useEffect(() => {
     if (!socket || !roomCode) return;
 
-    console.log('🎮 Setting up game engine for room:', roomCode);
-
     // Load initial game state
     socket.emit('loadGameState', { roomCode }, (response) => {
       if (response.success && response.gameState) {
-        console.log('📥 Loaded initial game state:', response.gameState);
         setGameState(response.gameState);
         updateLocalMessage(response.gameState, playerId);
       }
@@ -107,7 +102,6 @@ export default function useMultiplayerGameEngine(roomCode, playerId) {
 
     // Listen for game state updates
     const handleGameStateUpdate = ({ gameState: newState }) => {
-      console.log('🔄 Game state updated:', newState);
       setGameState(newState);
       updateLocalMessage(newState, playerId);
     };
@@ -145,47 +139,14 @@ export default function useMultiplayerGameEngine(roomCode, playerId) {
     }
   };
 
-  const initializeGame = async (room, currentPlayerId) => {
-    const deck = createDeck();
-    let idx = 0;
-
-    const playerStates = {};
-    room.players.forEach(player => {
-      playerStates[player.playerId] = {
-        name: player.playerName,
-        hand: deck.slice(idx, idx + 3),
-        faceUp: deck.slice(idx + 3, idx + 6),
-        faceDown: deck.slice(idx + 6, idx + 9),
-      };
-      idx += 9;
-    });
-
-    const initialState = {
-      phase: "swap",
-      deck: deck.slice(idx),
-      pile: [],
-      players: playerStates,
-      currentTurn: room.players[0].playerId,
-      isReversed: false,
-      winner: null,
-      customMessage: null,
-    };
-
-    await base44.entities.GameRoom.update(roomId, {
-      gameState: initialState
-    });
-  };
-
   const updateGameState = useCallback(async (updater) => {
     if (!gameState || !roomCode || !socket) return;
 
     const newState = typeof updater === 'function' ? updater(gameState) : updater;
 
-    // Optimistically update local state for immediate UI feedback
     setGameState(newState);
     updateLocalMessage(newState, playerId);
 
-    // Emit to server so other clients see the change
     try {
       socket.emit('gameStateUpdate', {
         roomCode,
@@ -200,10 +161,10 @@ export default function useMultiplayerGameEngine(roomCode, playerId) {
     let updatedState = { ...newState, customMessage: null };
 
     // Check for burn
-    let burned = false;
     if (playedCard.rank === 10 || checkFourOfAKind(updatedState.pile)) {
-      burned = true;
-      updatedState.customMessage = playedCard.rank === 10 ? "🔥 10 played! Burning pile..." : "🔥 Four of a kind! Burning pile...";
+      updatedState.customMessage = playedCard.rank === 10
+        ? "🔥 10 played! Burning pile..."
+        : "🔥 Four of a kind! Burning pile...";
 
       updateGameState(updatedState);
 
@@ -231,7 +192,7 @@ export default function useMultiplayerGameEngine(roomCode, playerId) {
       return;
     }
 
-    // Check for reverse or wild
+    // Handle special cards
     if (playedCard.rank === 5) {
       updatedState.isReversed = true;
       updatedState.customMessage = "⬇ Reverse! Next play must be equal or lower.";
@@ -262,10 +223,8 @@ export default function useMultiplayerGameEngine(roomCode, playerId) {
     }
 
     // Switch turn
-    if (!burned) {
-      const nextPlayer = getNextPlayer(who, updatedState.players);
-      updatedState.currentTurn = nextPlayer;
-    }
+    const nextPlayer = getNextPlayer(who, updatedState.players);
+    updatedState.currentTurn = nextPlayer;
 
     updateGameState(updatedState);
   }, [updateGameState]);
@@ -277,9 +236,7 @@ export default function useMultiplayerGameEngine(roomCode, playerId) {
     if (!playerState) return;
 
     if (gameState.phase === "swap") {
-      // During swap phase, don't check for turn - anyone can swap
-      if (playerState.swapReady) return; // If already ready, can't swap anymore
-      // Swap phase logic
+      if (playerState.swapReady) return;
       const inHand = playerState.hand.find(c => c.id === card.id);
       const inFaceUp = playerState.faceUp.find(c => c.id === card.id);
       if (!inHand && !inFaceUp) return;
@@ -317,7 +274,6 @@ export default function useMultiplayerGameEngine(roomCode, playerId) {
 
       setSelectedCardIds([...sel, card.id]);
     } else if (gameState.phase === "playing") {
-      // Playing phase logic - check for turn
       if (gameState.currentTurn !== playerId) return;
       const playerCards = getPlayerCards(playerState);
       if (!playerCards.find(c => c.id === card.id)) return;
@@ -335,7 +291,6 @@ export default function useMultiplayerGameEngine(roomCode, playerId) {
         return;
       }
 
-      // Can only select cards of the same rank
       if (sel.length > 0) {
         const firstCard = playerCards.find(c => c.id === sel[0]);
         if (firstCard && firstCard.rank !== card.rank) {
@@ -349,7 +304,6 @@ export default function useMultiplayerGameEngine(roomCode, playerId) {
       const sameRankCards = playableCards.filter(c => c.rank === card.rank);
 
       if (sameRankCards.length === newSelectedIds.length) {
-        // Auto-play all cards of this rank
         setSelectedCardIds(newSelectedIds);
         setTimeout(() => playCards(newSelectedIds), 100);
       } else {
@@ -364,15 +318,11 @@ export default function useMultiplayerGameEngine(roomCode, playerId) {
     const playerState = gameState.players[playerId];
     if (!playerState) return;
 
-    // Remove from faceDown
     const newFaceDown = playerState.faceDown.filter(c => c.id !== card.id);
     const newPile = [...gameState.pile, card];
-
-    // Check if it's a valid play
     const isValid = canPlayOnPile(card, gameState.pile, gameState.isReversed);
 
     if (!isValid) {
-      // Show the card briefly before taking pile
       updateGameState({
         ...gameState,
         pile: newPile,
@@ -383,7 +333,6 @@ export default function useMultiplayerGameEngine(roomCode, playerId) {
         customMessage: `Revealed: ${getRankName(card.rank)}... Invalid!`
       });
 
-      // Wait 1.2 seconds then take pile
       setTimeout(() => {
         const takenCards = newPile;
         const newHand = [...playerState.hand, ...takenCards].sort((a, b) => a.rank - b.rank);
@@ -402,7 +351,6 @@ export default function useMultiplayerGameEngine(roomCode, playerId) {
         });
       }, 1200);
     } else {
-      // Valid play - process it properly with processAfterPlay
       const stateAfterPlay = {
         ...gameState,
         pile: newPile,
@@ -412,13 +360,11 @@ export default function useMultiplayerGameEngine(roomCode, playerId) {
         }
       };
 
-      // First show the card
       updateGameState({
         ...stateAfterPlay,
         customMessage: `Revealed: ${getRankName(card.rank)}! Valid play.`
       });
 
-      // Then process after a brief delay
       setTimeout(() => {
         processAfterPlay(stateAfterPlay, card, playerId);
       }, 600);
@@ -430,7 +376,6 @@ export default function useMultiplayerGameEngine(roomCode, playerId) {
   const playCards = useCallback((cardsToPlay = selectedCardIds) => {
     if (!gameState || gameState.currentTurn !== playerId) return;
 
-    // Ensure cardsToPlay is an array
     const cardsArray = Array.isArray(cardsToPlay) ? cardsToPlay : selectedCardIds;
     if (cardsArray.length === 0) return;
 
@@ -469,23 +414,68 @@ export default function useMultiplayerGameEngine(roomCode, playerId) {
     setSelectedCardIds([]);
   }, [gameState, playerId, selectedCardIds]);
 
+  // ─── Draw from deck (chance mechanic) ───
+  const drawFromDeck = useCallback(() => {
+    if (!gameState || gameState.currentTurn !== playerId) return;
+    if (gameState.deck.length === 0) return;
+
+    const playerState = gameState.players[playerId];
+    const newDeck = [...gameState.deck];
+    const drawnCard = newDeck.pop();
+
+    if (canPlayOnPile(drawnCard, gameState.pile, gameState.isReversed)) {
+      // Auto-play the drawn card
+      const newPile = [...gameState.pile, drawnCard];
+      processAfterPlay({
+        ...gameState,
+        deck: newDeck,
+        pile: newPile,
+      }, drawnCard, playerId);
+    } else {
+      // Show card on pile briefly, then take the whole pile
+      const newPile = [...gameState.pile, drawnCard];
+      updateGameState({
+        ...gameState,
+        deck: newDeck,
+        pile: newPile,
+        customMessage: `Drew ${getRankName(drawnCard.rank)}... can't play it!`
+      });
+
+      setTimeout(() => {
+        const newHand = [...playerState.hand, ...newPile].sort((a, b) => a.rank - b.rank);
+        const nextPlayer = getNextPlayer(playerId, gameState.players);
+        updateGameState({
+          ...gameState,
+          deck: newDeck,
+          pile: [],
+          players: {
+            ...gameState.players,
+            [playerId]: { ...playerState, hand: newHand }
+          },
+          currentTurn: nextPlayer,
+          isReversed: false,
+          customMessage: "Took the pile."
+        });
+      }, 800);
+    }
+
+    setSelectedCardIds([]);
+  }, [gameState, playerId, updateGameState, processAfterPlay]);
+
   const confirmSwap = useCallback(async () => {
     if (!gameState || gameState.phase !== "swap") return;
 
     const playerState = gameState.players[playerId];
-    if (playerState?.swapReady) return; // Already ready
+    if (playerState?.swapReady) return;
 
-    // Mark this player as ready for swap
     const updatedPlayers = {
       ...gameState.players,
       [playerId]: { ...playerState, swapReady: true }
     };
 
-    // Check if all players are ready
     const allReady = Object.values(updatedPlayers).every(p => p.swapReady);
 
     if (allReady) {
-      // Determine who goes first - player with lowest non-special card
       const playerIds = Object.keys(updatedPlayers);
       let lowestPlayer = playerIds[0];
       let lowestRank = Infinity;
@@ -503,7 +493,6 @@ export default function useMultiplayerGameEngine(roomCode, playerId) {
         }
       }
 
-      // All players ready - start the game
       await updateGameState({
         ...gameState,
         players: updatedPlayers,
@@ -512,7 +501,6 @@ export default function useMultiplayerGameEngine(roomCode, playerId) {
         customMessage: null
       });
     } else {
-      // Just mark this player as ready
       await updateGameState({
         ...gameState,
         players: updatedPlayers
@@ -543,13 +531,25 @@ export default function useMultiplayerGameEngine(roomCode, playerId) {
     setSelectedCardIds([]);
   }, [gameState, playerId, updateGameState]);
 
+  // Compute whether the current player has any valid cards to play
+  const myPlayerState = gameState?.players?.[playerId];
+  const hasPlayableCards = myPlayerState && gameState
+    ? getPlayableCards(myPlayerState, gameState.pile, gameState.isReversed).length > 0
+    : false;
+
   const canPlay = gameState?.phase === "playing" &&
     gameState?.currentTurn === playerId &&
     selectedCardIds.length > 0;
 
   const canTakePile = gameState?.phase === "playing" &&
     gameState?.currentTurn === playerId &&
-    gameState?.pile?.length > 0;
+    (gameState?.pile?.length ?? 0) > 0 &&
+    !hasPlayableCards;
+
+  const canDrawFromDeck = gameState?.phase === "playing" &&
+    gameState?.currentTurn === playerId &&
+    (gameState?.deck?.length ?? 0) > 0 &&
+    !hasPlayableCards;
 
   return {
     gameState,
@@ -560,7 +560,9 @@ export default function useMultiplayerGameEngine(roomCode, playerId) {
     confirmSwap,
     playCards,
     takePile,
+    drawFromDeck,
     canPlay,
     canTakePile,
+    canDrawFromDeck,
   };
 }
