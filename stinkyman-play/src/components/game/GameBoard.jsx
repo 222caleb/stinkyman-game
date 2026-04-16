@@ -9,7 +9,6 @@ import useGameEngine from "./useGameEngine";
 import useCardAnimations from "./useCardAnimations";
 import FloatingCard from "./FloatingCard";
 import { motion, AnimatePresence } from "framer-motion";
-import { toast } from "sonner";
 import { RotateCcw, Home } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { base44 } from "@/api/base44Client";
@@ -17,6 +16,9 @@ import { base44 } from "@/api/base44Client";
 export default function GameBoard() {
   const navigate = useNavigate();
   const [cardTheme, setCardTheme] = React.useState("classic");
+  const [isBurning, setIsBurning] = React.useState(false);
+  const prevPileLength = React.useRef(0);
+  const prevPhase = React.useRef("idle");
 
   React.useEffect(() => {
     const loadTheme = async () => {
@@ -26,12 +28,12 @@ export default function GameBoard() {
           setCardTheme(user.cardTheme);
         }
       } catch (error) {
-        console.error("Failed to load theme:", error);
+        // no-op
       }
     };
     loadTheme();
   }, []);
-  
+
   const {
     state,
     deal,
@@ -41,33 +43,68 @@ export default function GameBoard() {
     takePile,
     sortHand,
     drawFromDeck,
+    setDifficulty,
     canPlay,
     canTakePile,
   } = useGameEngine();
 
-  const { animatingCards } = useCardAnimations();
+  const { animatingCards, animateDeal } = useCardAnimations();
 
-  const { phase, pile, deck, player, opponent, currentTurn, selectedCardIds, message, isReversed, winner } = state;
+  const { phase, pile, deck, player, opponent, currentTurn, selectedCardIds, message, isReversed, winner, difficulty } = state;
+
+  // Trigger deal animation when phase transitions from idle → swap
+  React.useEffect(() => {
+    if (prevPhase.current === "idle" && phase === "swap") {
+      setTimeout(() => {
+        animateDeal(player.hand, "#player-hand-area", 0.08);
+        animateDeal(player.faceUp, "#player-hand-area", 0.08);
+        animateDeal(opponent.hand, "#opponent-hand-area", 0.06);
+      }, 50);
+    }
+    prevPhase.current = phase;
+  }, [phase]);
+
+  // Trigger burn flash when pile clears after animatingBurn
+  React.useEffect(() => {
+    if (prevPileLength.current > 0 && pile.length === 0 && phase === "playing") {
+      setIsBurning(true);
+      setTimeout(() => setIsBurning(false), 600);
+    }
+    prevPileLength.current = pile.length;
+  }, [pile.length, phase]);
 
   const handleBackToMenu = () => {
     navigate(createPageUrl("MainMenu"));
   };
 
-  // Get selected cards for multi-play indicator
-  const playerCards = [...player.hand, ...player.faceUp, ...player.faceDown];
-  const selectedCards = selectedCardIds.map(id => playerCards.find(c => c?.id === id)).filter(Boolean);
-  const multiPlayCount = selectedCards.length > 1 ? selectedCards.length : null;
-
   const handleMultiplayer = () => {
     navigate(createPageUrl("MultiplayerLobby"));
   };
+
+  const playerCards = [...player.hand, ...player.faceUp, ...player.faceDown];
+  const selectedCards = selectedCardIds.map(id => playerCards.find(c => c?.id === id)).filter(Boolean);
+  const multiPlayCount = selectedCards.length > 1 ? selectedCards.length : null;
 
   const playerDisabled = phase !== "playing" || currentTurn !== "player";
 
   return (
     <div className="relative w-full h-full flex flex-col bg-gradient-to-b from-emerald-900 via-green-800 to-emerald-900 overflow-hidden">
-      {/* Subtle felt texture overlay */}
+      {/* Felt texture overlay */}
       <div className="absolute inset-0 opacity-10 bg-[radial-gradient(ellipse_at_center,_transparent_50%,_rgba(0,0,0,0.3)_100%)]" />
+
+      {/* Burn flash overlay */}
+      <AnimatePresence>
+        {isBurning && (
+          <motion.div
+            key="burn-flash"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: [0, 0.5, 0] }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.6, times: [0, 0.3, 1] }}
+            className="absolute inset-0 z-40 bg-orange-500 pointer-events-none"
+          />
+        )}
+      </AnimatePresence>
 
       {/* Floating card animations */}
       {animatingCards.map((anim) => (
@@ -88,6 +125,25 @@ export default function GameBoard() {
       >
         <Home className="w-5 h-5 pointer-events-none" />
       </button>
+
+      {/* Difficulty selector — only visible on idle screen */}
+      {phase === "idle" && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex gap-1 bg-black/20 rounded-lg p-1">
+          {["easy", "medium", "hard"].map(level => (
+            <button
+              key={level}
+              onClick={() => setDifficulty(level)}
+              className={`px-3 py-1 rounded-md text-xs font-semibold capitalize transition-colors ${
+                difficulty === level
+                  ? "bg-yellow-500 text-gray-900"
+                  : "text-white/60 hover:text-white hover:bg-white/10"
+              }`}
+            >
+              {level}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Reverse indicator */}
       <AnimatePresence>
@@ -185,7 +241,6 @@ export default function GameBoard() {
           disabled={phase === "swap" ? false : playerDisabled}
           theme={cardTheme}
         />
-
       </div>
 
       {/* Action Bar - Fixed to bottom */}
