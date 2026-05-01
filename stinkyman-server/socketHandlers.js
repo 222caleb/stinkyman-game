@@ -296,6 +296,64 @@ export function setupSocketHandlers(io) {
       }
     });
 
+    // Rematch request
+    socket.on('requestRematch', async ({ roomCode, playerId }) => {
+      try {
+        const room = await getRoom(roomCode);
+        if (!room) return;
+
+        const gameState = room.game_state;
+        if (!gameState || gameState.phase !== 'gameOver') return;
+
+        const rematchRequests = gameState.rematchRequests || [];
+        if (!rematchRequests.includes(playerId)) {
+          rematchRequests.push(playerId);
+        }
+
+        const playerIds = Object.keys(gameState.players);
+        const allWantRematch = playerIds.every(id => rematchRequests.includes(id));
+
+        if (allWantRematch) {
+          // Start fresh game with same players
+          const deck = createDeck();
+          let idx = 0;
+          const playerStates = {};
+          playerIds.forEach(pid => {
+            playerStates[pid] = {
+              name: gameState.players[pid].name,
+              hand: deck.slice(idx, idx + 3),
+              faceUp: deck.slice(idx + 3, idx + 6),
+              faceDown: deck.slice(idx + 6, idx + 9),
+              swapReady: false,
+            };
+            idx += 9;
+          });
+
+          const newGameState = {
+            phase: 'swap',
+            deck: deck.slice(idx),
+            pile: [],
+            players: playerStates,
+            currentTurn: playerIds[0],
+            isReversed: false,
+            winner: null,
+            customMessage: 'Rematch! Swap your cards.',
+            rematchRequests: [],
+          };
+
+          await updateGameState(roomCode, newGameState);
+          io.to(roomCode).emit('gameStateUpdated', { gameState: newGameState });
+          console.log(`🔄 Rematch started in ${roomCode}`);
+        } else {
+          const updatedState = { ...gameState, rematchRequests };
+          await updateGameState(roomCode, updatedState);
+          io.to(roomCode).emit('gameStateUpdated', { gameState: updatedState });
+        }
+      } catch (error) {
+        console.error('Error handling rematch request:', error);
+      }
+    });
+
     // Reconnect to existing game
     socket.on('reconnect', async ({ roomCode, playerId }) => {
       try {

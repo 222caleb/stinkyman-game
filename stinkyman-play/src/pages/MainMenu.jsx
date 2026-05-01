@@ -3,10 +3,12 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Play, Users, BookOpen, User, Trophy } from "lucide-react";
 import { createPageUrl } from "@/utils";
+import useReconnect from "@/components/multiplayer/useReconnect";
 
 export default function MainMenu() {
   const navigate = useNavigate();
   const [hoveredButton, setHoveredButton] = React.useState(null);
+  const { reconnectData, isReconnecting, attemptReconnect, clearReconnectData } = useReconnect();
 
   const handleSinglePlayer = () => {
     navigate(createPageUrl("Game"));
@@ -63,9 +65,39 @@ export default function MainMenu() {
         <User className="w-6 h-6" />
       </Button>
 
+      {/* Reconnect Banner */}
+      {reconnectData && (
+        <div className="absolute top-20 left-1/2 -translate-x-1/2 w-full max-w-sm px-4">
+          <div className="bg-yellow-500/20 border border-yellow-400/40 rounded-xl px-4 py-3 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-yellow-300 text-sm font-semibold">Game in progress</p>
+              <p className="text-white/60 text-xs">Room: {reconnectData.roomCode}</p>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                onClick={attemptReconnect}
+                disabled={isReconnecting}
+                size="sm"
+                className="bg-yellow-500 hover:bg-yellow-400 text-gray-900 font-bold h-8 text-xs"
+              >
+                {isReconnecting ? "Rejoining..." : "Rejoin"}
+              </Button>
+              <Button
+                onClick={clearReconnectData}
+                size="sm"
+                variant="ghost"
+                className="text-white/60 hover:text-white h-8 text-xs"
+              >
+                Dismiss
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Logo */}
       <div className="mb-8 text-center">
-        <img 
+        <img
           src="https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/698a96bb063ed915c9165ce7/aaefd084c_stinkymanlogo.png"
           alt="Stinky Man Logo"
           className="w-48 h-48 mx-auto object-cover drop-shadow-2xl"

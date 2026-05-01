@@ -510,6 +510,11 @@ export default function useMultiplayerGameEngine(roomCode, playerId) {
     setSelectedCardIds([]);
   }, [gameState, playerId, updateGameState]);
 
+  const requestRematch = useCallback(() => {
+    if (!socket || !roomCode || !playerId) return;
+    socket.emit('requestRematch', { roomCode, playerId });
+  }, [socket, roomCode, playerId]);
+
   const takePile = useCallback(() => {
     if (!gameState || gameState.currentTurn !== playerId || gameState.pile.length === 0) return;
 
@@ -551,6 +556,8 @@ export default function useMultiplayerGameEngine(roomCode, playerId) {
     (gameState?.deck?.length ?? 0) > 0 &&
     !hasPlayableCards;
 
+  const myRematchRequested = (gameState?.rematchRequests || []).includes(playerId);
+
   return {
     gameState,
     myState: gameState?.players?.[playerId],
@@ -561,8 +568,10 @@ export default function useMultiplayerGameEngine(roomCode, playerId) {
     playCards,
     takePile,
     drawFromDeck,
+    requestRematch,
     canPlay,
     canTakePile,
     canDrawFromDeck,
+    myRematchRequested,
   };
 }

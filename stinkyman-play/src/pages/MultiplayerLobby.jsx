@@ -80,9 +80,16 @@ export default function MultiplayerLobby() {
       setRoomPlayers(prev => prev.filter(p => p.id !== disconnectedId));
     });
 
+    // Joined as spectator
+    socket.on('joinedAsSpectator', ({ roomCode: code }) => {
+      toast.success("Joined as spectator!");
+      navigate(createPageUrl("MultiplayerGame"), {
+        state: { roomCode: code, playerId: null, playerName: playerName.trim() || "Spectator", isSpectator: true }
+      });
+    });
+
     // Error handling
     socket.on('error', ({ message }) => {
-      console.error('❌ Socket error:', message);
       toast.error(message);
     });
 
@@ -93,6 +100,7 @@ export default function MultiplayerLobby() {
       socket.off('playerReadyChanged');
       socket.off('gameStateUpdated');
       socket.off('playerDisconnected');
+      socket.off('joinedAsSpectator');
       socket.off('error');
     };
   }, [socket, playerId, playerName, roomCode, navigate]);
